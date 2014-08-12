@@ -6,9 +6,6 @@ use Symfony\Component\Config\FileLocator;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\Resource\DirectoryResource;
 use Symfony\Component\HttpKernel\DependencyInjection\Extension;
-use Symfony\Component\DependencyInjection\Reference;
-use Symfony\Component\DependencyInjection\Parameter;
-use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader;
 use Symfony\Component\Finder\Finder;
@@ -39,56 +36,31 @@ class LexikTranslationExtension extends Extension
         $container->setParameter('lexik_translation.managed_locales', $config['managed_locales']);
         $container->setParameter('lexik_translation.fallback_locale', $config['fallback_locale']);
         $container->setParameter('lexik_translation.storage', $config['storage']);
+        $container->setParameter('lexik_translation.storage.type', $config['storage']['type']);
         $container->setParameter('lexik_translation.base_layout', $config['base_layout']);
         $container->setParameter('lexik_translation.grid_input_type', $config['grid_input_type']);
         $container->setParameter('lexik_translation.use_yml_tree', $config['use_yml_tree']);
 
         $objectManager = isset($config['storage']['object_manager']) ? $config['storage']['object_manager'] : null;
-
-        $this->buildTranslationStorageDefinition($container, $config['storage']['type'], $objectManager);
-
-        $this->registerTranslatorConfiguration($config, $container);
-    }
-
-    /**
-     * Build the 'lexik_translation.translation_storage' service definition.
-     *
-     * @param ContainerBuilder $container
-     * @param string           $storage
-     * @param string           $objectManager
-     */
-    protected function buildTranslationStorageDefinition(ContainerBuilder $container, $storage, $objectManager)
-    {
-        $container->setParameter('lexik_translation.storage.type', $storage);
-
-        if ('orm' == $storage) {
+        if ('orm' == $config['storage']['type']) {
             if(isset($objectManager)){
-                $objectManagerReference = new Reference(sprintf('doctrine.orm.%s_entity_manager', $objectManager));
+                $objectManagerReference = sprintf('doctrine.orm.%s_entity_manager', $objectManager);
             } else {
-                $objectManagerReference = new Reference('doctrine.orm.entity_manager');
+                $objectManagerReference = 'doctrine.orm.entity_manager';
             }
-        } else if ('mongodb' == $storage) {
+        } else if ('mongodb' == $config['storage']['type']) {
             if(isset($objectManager)){
-                $objectManagerReference = new Reference(sprintf('doctrine_mongodb.odm.%s_document_manager', $objectManager));
+                $objectManagerReference = sprintf('doctrine_mongodb.odm.%s_document_manager', $objectManager);
             } else {
-                $objectManagerReference = new Reference('doctrine.odm.mongodb.document_manager');
+                $objectManagerReference = 'doctrine.odm.mongodb.document_manager';
             }
         } else {
-            throw new \RuntimeException(sprintf('Unsupported storage "%s".', $storage));
+            throw new \RuntimeException(sprintf('Unsupported storage "%s".', $config['storage']['type']));
         }
 
-        $storageDefinition = new Definition();
-        $storageDefinition->setClass(new Parameter(sprintf('lexik_translation.%s.translation_storage.class', $storage)));
-        $storageDefinition->setArguments(array(
-            $objectManagerReference,
-            array(
-                'trans_unit'  => new Parameter(sprintf('lexik_translation.%s.trans_unit.class', $storage)),
-                'translation' => new Parameter(sprintf('lexik_translation.%s.translation.class', $storage)),
-                'file'        => new Parameter(sprintf('lexik_translation.%s.file.class', $storage)),
-            ),
-        ));
+        $container->setParameter('lexik_translation.storage.object_manager', $objectManagerReference);
 
-        $container->setDefinition('lexik_translation.translation_storage', $storageDefinition);
+        $this->registerTranslatorConfiguration($config, $container);
     }
 
     /**
